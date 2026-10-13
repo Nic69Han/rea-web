@@ -9,20 +9,29 @@ import type { AddressInfo } from "node:net";
 
 import { AnalyzeRoute } from "./analyzeRoute.js";
 import type { WebAnalyzer } from "./analyzeTarget.js";
+import type { WebCapabilitiesReader } from "./capabilities.js";
+import { DecompileRoute } from "./decompileRoute.js";
+import type { WebDecompiler } from "./decompileExport.js";
 import { webHostAuthority, type WebConfig } from "./config.js";
 import {
   applySecurityHeaders,
   HttpRejection,
   sendBody,
+  sendJson,
   sendRejection,
 } from "./http.js";
+import { SourceRequests } from "./sourceRequests.js";
 import type { WebCleanup } from "./types.js";
 import { APP_CSS, APP_JS, INDEX_HTML } from "./ui/assets.js";
+import { UploadStaging } from "./uploadStaging.js";
+import { WorkGate } from "./workGate.js";
 
 /** Inputs for one local web server. */
 export interface WebServerOptions {
   readonly config: WebConfig;
   readonly analyze: WebAnalyzer;
+  readonly decompile: WebDecompiler;
+  readonly capabilities: WebCapabilitiesReader;
   /** Defaults to 32 random bytes encoded as base64url. */
   readonly token?: string;
 }
@@ -56,10 +65,11 @@ export const startWebServer = async (
 ): Promise<RunningWebServer> => {
   const token = options.token ?? randomBytes(32).toString("base64url");
   const expected = digest(token);
-  const route = new AnalyzeRoute(
-    options.analyze,
-    options.config.maxUploadBytes,
-  );
+  const staging = new UploadStaging();
+  const gate = new WorkGate();
+  const sources = new SourceRequests(staging, options.config.maxUploadBytes);
+  const analyzeRoute = new AnalyzeRoute(options.analyze, sources, gate);
+  const decompileRoute = new DecompileRoute(options.decompile, sources, gate);
   let authority = "";
   const tokenMatches = (candidate: unknown): boolean =>
     typeof candidate === "string" &&
@@ -91,28 +101,25 @@ export const startWebServer = async (
           "forbidden_token",
           "Missing or invalid token.",
         );
-      if (pathname !== "/api/analyze")
+      if (pathname === "/api/capabilities") {
+        if (request.method !== "GET")
+          throw new HttpRejection(405, "method_not_allowed", "Use GET.");
+        sendJson(response, 200, await options.capabilities());
+        return;
+      }
+      const post =
+        pathname === "/api/analyze"
+          ? analyzeRoute
+          : pathname === "/api/decompile"
+            ? decompileRoute
+            : undefined;
+      if (post === undefined)
         throw new HttpRejection(404, "not_found", "Unknown API route.");
       if (request.method !== "POST")
         throw new HttpRejection(405, "method_not_allowed", "Use POST.");
-      return route.handle(request, response);
+      return post.handle(request, response, query);
     }
-    if (request.method !== "GET")
-      throw new HttpRejection(405, "method_not_allowed", "Use GET.");
-    if (pathname === "/") {
-      if (!tokenMatches(query.get("token")))
-        throw new HttpRejection(
-          403,
-          "forbidden_token",
-          "Missing or invalid token.",
-        );
-      sendBody(response, 200, "text/html; charset=utf-8", INDEX_HTML);
-      return;
-    }
-    const asset = STATIC_ASSETS[pathname];
-    if (asset === undefined)
-      throw new HttpRejection(404, "not_found", "Unknown route.");
-    sendBody(response, 200, asset.type, asset.body);
+    servePage(request, response, pathname, tokenMatches(query.get("token")));
   };
 
   const server = createServer((request, response) => {
@@ -140,7 +147,7 @@ export const startWebServer = async (
         server.close(() => resolve()),
       );
       server.closeAllConnections();
-      const cleanup = await route.stop();
+      const cleanup = await gate.stop(staging);
       await closed;
       return cleanup;
     },
@@ -155,3 +162,28 @@ const listen = (server: Server, config: WebConfig): Promise<number> =>
       resolve((server.address() as AddressInfo).port);
     });
   });
+
+/** Serve the UI document (token in the query) or a static asset. */
+const servePage = (
+  request: IncomingMessage,
+  response: ServerResponse,
+  pathname: string,
+  tokenAccepted: boolean,
+): void => {
+  if (request.method !== "GET")
+    throw new HttpRejection(405, "method_not_allowed", "Use GET.");
+  if (pathname === "/") {
+    if (!tokenAccepted)
+      throw new HttpRejection(
+        403,
+        "forbidden_token",
+        "Missing or invalid token.",
+      );
+    sendBody(response, 200, "text/html; charset=utf-8", INDEX_HTML);
+    return;
+  }
+  const asset = STATIC_ASSETS[pathname];
+  if (asset === undefined)
+    throw new HttpRejection(404, "not_found", "Unknown route.");
+  sendBody(response, 200, asset.type, asset.body);
+};

@@ -74,7 +74,7 @@ code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, m
 .drop-zone.busy { opacity: 0.9; }
 .field-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .field-row label { flex: 1 0 100%; font-weight: 600; }
-input[type="text"], input[type="search"] {
+input[type="text"], input[type="search"], select {
   flex: 1 1 280px;
   min-width: 0;
   padding: 8px 10px;
@@ -84,6 +84,7 @@ input[type="text"], input[type="search"] {
   color: var(--fg);
   font: inherit;
 }
+select { flex: 0 1 auto; }
 button {
   padding: 7px 14px;
   border: 1px solid var(--border);

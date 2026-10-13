@@ -359,14 +359,16 @@ const runAnalysis = async (
   );
 };
 
-const executeAnalysisTool = async (input: {
+/** Execute one tool on an open session and wrap success as Evidence. */
+export const executeAnalysisTool = async (input: {
   readonly session: BinarySession;
   readonly openedTarget: BinaryTarget;
   readonly tool:
     | NativeToolName
     | ArtifactAnalysisOperation
     | ManagedToolName
-    | DirectAnalysisTool;
+    | DirectAnalysisTool
+    | "list_procedures";
   readonly arguments: Readonly<Record<string, JsonValue>>;
   readonly signal: AbortSignal;
   readonly evidenceProfile: AnalysisProfileCommitment | undefined;
@@ -605,7 +607,7 @@ const fileExists = async (path: string): Promise<boolean> => {
   }
 };
 
-const cliError = (error: AnalysisError): JsonValue => ({
+export const cliError = (error: AnalysisError): JsonValue => ({
   error: "Analysis failed",
   ...projectAnalysisError(error),
 });

@@ -1,6 +1,6 @@
 export const CORE_JS: string = String.raw`
 var SVGNS = 'http://www.w3.org/2000/svg';
-var state = { token: null, busy: false, controller: null, timer: null, startedAt: 0 };
+var state = { token: null, lastSource: null, capabilities: null, busy: false, controller: null, timer: null, startedAt: 0 };
 var dom = {};
 
 function el(tag, cls, text) {
@@ -127,6 +127,7 @@ function submitPath() {
     return;
   }
   dom.fileInfo.hidden = true;
+  state.lastSource = { kind: 'path', path: value };
   run('Analyzing ' + shorten(value, 80), {
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path: value }),
@@ -138,6 +139,7 @@ function submitFile(file) {
   var size = fmtBytes(file.size);
   dom.fileInfo.hidden = false;
   dom.fileInfo.textContent = 'Selected file: ' + file.name + ' — ' + size;
+  state.lastSource = { kind: 'file', file: file };
   run('Uploading and analyzing ' + shorten(file.name, 60) + ' (' + size + ')', {
     headers: {
       'content-type': 'application/octet-stream',
@@ -217,6 +219,7 @@ function init() {
     setStatus('No access token. Open the URL printed by "rea web".', 'error');
   } else {
     dom.pathInput.focus();
+    loadCapabilities();
   }
 }
 

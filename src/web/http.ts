@@ -39,6 +39,21 @@ export const sendBody = (
   response.end(body);
 };
 
+/** Send raw bytes with caller-supplied headers (for example a download). */
+export const sendBytes = (
+  response: ServerResponse,
+  status: number,
+  body: Uint8Array,
+  headers: Readonly<Record<string, string>>,
+): void => {
+  if (response.headersSent || response.destroyed) return;
+  response.statusCode = status;
+  response.setHeader("content-length", body.byteLength);
+  for (const [name, value] of Object.entries(headers))
+    response.setHeader(name, value);
+  response.end(body);
+};
+
 export const sendJson = (
   response: ServerResponse,
   status: number,

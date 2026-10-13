@@ -1,5 +1,7 @@
 import { createDirectAnalysis } from "../composition/directAnalysis.js";
 import { createWebAnalyzer } from "./analyzeTarget.js";
+import { createWebCapabilitiesReader } from "./capabilities.js";
+import { createWebDecompiler } from "./decompileExport.js";
 import { parseWebConfig } from "./config.js";
 import { startWebServer } from "./server.js";
 
@@ -15,10 +17,17 @@ export const runEntrypoint = async (
     process.stderr.write(`${config.error.message}: ${settings}\n`);
     return 1;
   }
-  const { runProviderAnalysis } = createDirectAnalysis(environment);
+  const { runProviderAnalysis, runDirectAnalysisSession, runSessionStatus } =
+    createDirectAnalysis(environment);
+  const capabilities = createWebCapabilitiesReader(() => runSessionStatus());
   const server = await startWebServer({
     config: config.value,
     analyze: createWebAnalyzer(runProviderAnalysis),
+    capabilities,
+    decompile: createWebDecompiler({
+      runDirectAnalysisSession,
+      readCapabilities: capabilities,
+    }),
   });
   // The URL carries the access token. It is printed once, to the terminal that
   // started the server, and is never logged elsewhere.

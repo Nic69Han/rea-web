@@ -1,18 +1,10 @@
 import { readdir, readFile, stat } from "node:fs/promises";
-import { request, type IncomingHttpHeaders } from "node:http";
+import { request } from "node:http";
 import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { createDirectAnalysis } from "../../../src/composition/directAnalysis.js";
-import {
-  createWebAnalyzer,
-  type WebAnalyzer,
-} from "../../../src/web/analyzeTarget.js";
-import {
-  startWebServer,
-  type RunningWebServer,
-} from "../../../src/web/server.js";
+import type { RunningWebServer } from "../../../src/web/server.js";
 import type { WebAnalysisResponse } from "../../../src/web/types.js";
 import { createTestTempDirectory } from "../../fixtures/temporaryDirectory.js";
 import {
@@ -20,95 +12,12 @@ import {
   writeMachoApp,
   writeMachoExecutable,
 } from "../../fixtures/webTargets.js";
-
-const { runProviderAnalysis } = createDirectAnalysis({});
-const running: RunningWebServer[] = [];
-
-afterEach(async () => {
-  for (const server of running.splice(0)) await server.close();
-  vi.unstubAllEnvs();
-});
-
-const start = async (
-  options: {
-    readonly maxUploadBytes?: number;
-    readonly analyze?: WebAnalyzer;
-  } = {},
-): Promise<RunningWebServer> => {
-  const server = await startWebServer({
-    config: {
-      host: "127.0.0.1",
-      port: 0,
-      maxUploadBytes: options.maxUploadBytes ?? 1_048_576,
-    },
-    analyze: options.analyze ?? createWebAnalyzer(runProviderAnalysis),
-  });
-  running.push(server);
-  return server;
-};
-
-interface Reply {
-  readonly status: number;
-  readonly headers: IncomingHttpHeaders;
-  readonly body: string;
-}
-
-const send = (
-  server: RunningWebServer,
-  options: {
-    readonly method?: string;
-    readonly path: string;
-    readonly headers?: Record<string, string>;
-    readonly body?: Buffer | string;
-  },
-): Promise<Reply> =>
-  new Promise((resolve, reject) => {
-    const outgoing = request(
-      {
-        host: "127.0.0.1",
-        port: server.port,
-        method: options.method ?? "GET",
-        path: options.path,
-        headers: {
-          host: `127.0.0.1:${String(server.port)}`,
-          ...options.headers,
-        },
-      },
-      (response) => {
-        const chunks: Buffer[] = [];
-        response.on("data", (chunk: Buffer) => chunks.push(chunk));
-        response.on("end", () =>
-          resolve({
-            status: response.statusCode ?? 0,
-            headers: response.headers,
-            body: Buffer.concat(chunks).toString("utf8"),
-          }),
-        );
-      },
-    );
-    outgoing.on("error", reject);
-    outgoing.end(options.body);
-  });
+import { post, send, start, type Reply } from "./webHarness.js";
 
 const api = (
   server: RunningWebServer,
-  options: {
-    readonly headers?: Record<string, string>;
-    readonly body?: Buffer | string;
-    readonly token?: string | null;
-  },
-): Promise<Reply> =>
-  send(server, {
-    method: "POST",
-    path: "/api/analyze",
-    headers: {
-      ...(options.token === null
-        ? {}
-        : { "x-rea-web-token": options.token ?? server.token }),
-      ...options.headers,
-    },
-    ...(options.body === undefined ? {} : { body: options.body }),
-  });
+  options: Parameters<typeof post>[2],
+): Promise<Reply> => post(server, "/api/analyze", options);
 
 const analyzePath = async (
   server: RunningWebServer,

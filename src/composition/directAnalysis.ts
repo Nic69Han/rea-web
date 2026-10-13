@@ -1,6 +1,10 @@
 import { snapshotEnvironment } from "../process/snapshotEnvironment.js";
 import { parseConfig } from "../config/parseConfig.js";
 import type { DirectAnalysisDependencies } from "../application/DirectAnalysisDependencies.js";
+import type {
+  DirectSessionOptions,
+  DirectSessionWork,
+} from "../application/DirectAnalysisSession.js";
 
 type DirectAnalysisRuntime = typeof import("../application/DirectAnalysis.js");
 type DirectAnalysisStatusRuntime =
@@ -43,6 +47,16 @@ export const createDirectAnalysis = (
       await import("../application/DirectAnalysis.js");
     return runProviderAnalysis(dependencies, ...args);
   };
+  /** Open once, run several read-only calls, and close (keeps the work's type). */
+  const runDirectAnalysisSession = async <Value>(
+    path: string,
+    options: DirectSessionOptions,
+    work: DirectSessionWork<Value>,
+  ) => {
+    const { runDirectAnalysisSession } =
+      await import("../application/DirectAnalysisSession.js");
+    return runDirectAnalysisSession(dependencies, path, options, work);
+  };
   const runSessionStatus: BoundOperation<
     DirectAnalysisStatusRuntime["runSessionStatus"]
   > = async (...args) => {
@@ -53,6 +67,7 @@ export const createDirectAnalysis = (
   return {
     runDirectAnalysis,
     runProviderAnalysis,
+    runDirectAnalysisSession,
     runSessionStatus,
   };
 };

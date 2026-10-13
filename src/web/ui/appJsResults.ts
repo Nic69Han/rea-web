@@ -134,7 +134,7 @@ function cleanupCard(c) {
 function renderResult(data) {
   clearNode(dom.results);
   var root = dom.results;
-  if (isRecord(data.target)) { root.appendChild(targetCard(data.target)); }
+  if (isRecord(data.target)) { root.appendChild(targetCard(data.target)); root.appendChild(decompileCard()); }
   var ops = Array.isArray(data.operations) ? data.operations.filter(isRecord) : [];
   var opSection = el('section');
   opSection.appendChild(el('h2', null, 'Operations'));

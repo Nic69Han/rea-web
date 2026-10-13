@@ -41,6 +41,17 @@ describe("web UI assets", () => {
     expect(APP_JS).not.toMatch(/https?:\/\/(?!www\.w3\.org\/2000\/svg)/);
   });
 
+  it("offers the decompiled-code download through a revoked object URL", () => {
+    for (const expected of [
+      "Download decompiled code (.zip)",
+      "/api/decompile",
+      "/api/capabilities",
+      "URL.createObjectURL",
+      "URL.revokeObjectURL",
+    ])
+      expect(APP_JS).toContain(expected);
+  });
+
   it("parses as a script", () => {
     expect(() => new Script(APP_JS, { filename: "app.js" })).not.toThrow();
   });

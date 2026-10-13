@@ -1,4 +1,5 @@
 import { CORE_JS } from "./appJsCore.js";
+import { DECOMPILE_JS } from "./appJsDecompile.js";
 import { GRAPH_JS } from "./appJsGraph.js";
 import { LAYOUT_JS } from "./appJsLayout.js";
 import { RESULTS_JS } from "./appJsResults.js";
@@ -9,6 +10,7 @@ export const APP_JS: string = [
   "'use strict';",
   CORE_JS,
   RESULTS_JS,
+  DECOMPILE_JS,
   LAYOUT_JS,
   GRAPH_JS,
   "})();",

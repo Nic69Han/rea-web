@@ -1,8 +1,9 @@
 # Local web UI
 
-`rea web` starts a local page for read-only static analysis of one file or path at a
-time. It is a prototype adapter over the shared analysis workflows; it does not use
-Hopper, Ghidra, or IDA.
+`rea web` starts a local page for read-only analysis of one file or path at a
+time. It is a prototype adapter over the shared analysis workflows. The provider-free
+analysis never uses Hopper, Ghidra, or IDA; the optional decompiled-code export
+(below) uses whichever of them you have already configured.
 
 ## Launch
 
@@ -29,7 +30,7 @@ succeeded and retains the directory if removal failed.
 - Binds only to loopback and rejects any `Host` or `Origin` that is not the bound address (403).
 - A per-process random token is required on every request (403 when missing or wrong).
 - Strict CSP, `no-store`, no external resources, no CORS headers, and no `innerHTML` in the UI.
-- One analysis at a time (409 while busy); closing the page aborts the run.
+- One analysis or export at a time across all routes (409 while busy); closing the page aborts the run.
 - The target is never executed, modified, or deleted.
 
 ## What is analyzed
@@ -42,9 +43,59 @@ Each result shows retained Evidence verbatim, limitations, confidence, and graph
 coverage (`complete`, `partial`, `unknown`). Graphs are capped at 500 nodes and
 1500 edges, with omitted counts shown.
 
+## Download decompiled code (.zip)
+
+After a result renders, the page offers **Download decompiled code (.zip)**. It runs the
+existing read-only deep-provider operations (`list_procedures`, then
+`procedure_pseudo_code` per procedure) inside **one** provider session: the target is
+opened once, every function is decompiled sequentially, and the session is closed. With
+Ghidra that avoids paying import and auto-analysis per function.
+
+Ghidra, IDA and Hopper are bring-your-own (see [installation](installation.md)).
+`GET /api/capabilities` returns `{"deep_providers":[{"id","available","reason?"}]}` from the
+same provider availability logic as `rea` status; the button is disabled with the
+reason when none is available, and a provider select appears when several are.
+
+`POST /api/decompile` takes `{"path": string, "provider"?: "ghidra"|"ida"|"hopper",
+"max_functions"?: integer}` as JSON, or an `application/octet-stream` upload exactly like
+`/api/analyze` with `provider` and `max_functions` as query parameters. `max_functions`
+defaults to 200; values above 2000 or below 1 get 400 `invalid_request`. The upload's
+temporary directory lives until the export finishes and is then removed; the result is in
+the `x-rea-cleanup` header (and `x-rea-cleanup-detail`, percent-encoded, on failure).
+
+| Status | Code                        | Meaning                                                           |
+| ------ | --------------------------- | ----------------------------------------------------------------- |
+| 200    | (zip)                       | `application/zip`, `attachment; filename="<name>-decompiled.zip"` |
+| 400    | `invalid_request`           | Malformed body or out-of-range `max_functions`                    |
+| 409    | `busy`                      | Another analysis or export is running                             |
+| 424    | `deep_provider_unavailable` | No (or the requested) deep provider is installed or configured    |
+| 422    | `decompile_failed`          | The provider could not open the target or list its procedures     |
+
+424 (Failed Dependency) is used instead of 409 so clients can tell a missing
+provider from a busy server. A single function that fails or yields no pseudo-code is
+recorded, never fatal.
+
+Archive layout:
+
+- `README.md`: target, SHA-256, provider, date, counts, limitations, and the note that
+  pseudo-code is derived, provider-specific output rather than original source.
+- `manifest.json`: target identity, provider, per-function `{name, address, file, status}`,
+  skipped external/thunk procedures, omitted count and truncation, failures with reasons,
+  and whether the provider closed cleanly.
+- `functions/<index>_<name>_<address>.c`: pseudo-code with a header comment; names are
+  reduced to a safe segment (the verbatim name stays in the manifest).
+- `evidence/`: the provider Evidence (or projected error) for every call, verbatim.
+
+Procedures are taken in the provider's order; external and thunk procedures are skipped
+(and listed). More than `max_functions` decompilable procedures is reported as truncation.
+
 ## Limitations
 
-- No deep-provider analysis, call graphs, execution, or mutation.
+- Deep providers are used only for the decompiled-code export; no call graphs, execution,
+  or mutation.
+- The export is sequential and can take minutes on large targets; Cancel aborts it.
+- Verified end to end with Ghidra 12.1.4 on a small ELF only; IDA and Hopper exports are
+  covered by shared-provider tests, not by a real run.
 - `dist/web` is not bundled; it runs from a built checkout.
 - The hand-written layout is meant for modest graphs.
 - Verified with the Chromium browser and synthetic Mach-O fixtures only.
