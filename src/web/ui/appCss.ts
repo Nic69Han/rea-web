@@ -1,3 +1,4 @@
+import { BENCH_CSS } from "./appCssBench.js";
 import { STAGES_CSS } from "./appCssStages.js";
 
 const LIGHT_VARS: string = `:root {
@@ -8,6 +9,7 @@ const LIGHT_VARS: string = `:root {
   --fg: #1b1f24;
   --muted: #566170;
   --border: #cfd6de;
+  --grid: #e7ecf2;
   --accent: #0b5fcc;
   --accent-fg: #ffffff;
   --accent-soft: #dbe8fb;
@@ -33,6 +35,7 @@ const DARK_VARS: string = `    color-scheme: dark;
     --fg: #e6e9ed;
     --muted: #9aa5b1;
     --border: #3a444f;
+    --grid: #232b35;
     --accent: #6aa9ff;
     --accent-fg: #0b1220;
     --accent-soft: #1d2f4a;
@@ -206,4 +209,4 @@ button.link { border: none; background: none; padding: 0; color: var(--accent); 
 .swatch.kind-7 { border-color: var(--k7); background: color-mix(in srgb, var(--k7) 30%, transparent); }
 `;
 
-export const APP_CSS: string = BASE_CSS + STAGES_CSS;
+export const APP_CSS: string = BASE_CSS + STAGES_CSS + BENCH_CSS;

@@ -52,7 +52,7 @@ describe("web UI assets", () => {
       expect(APP_JS).toContain(expected);
   });
 
-  it("ships the three-stage flow: idle drop target, analysis rosette, results workspace", () => {
+  it("ships the three-stage flow: idle drop target, analysis instrument, results workspace", () => {
     for (const id of [
       'id="stage-idle"',
       'id="stage-analyzing"',
@@ -67,8 +67,7 @@ describe("web UI assets", () => {
     expect(INDEX_HTML).toMatch(/aria-live="polite"/);
     for (const expected of [
       "createProgress",
-      "buildRosette",
-      "role: 'img'",
+      "buildBench",
       "inspect_artifact",
       "trace_dylib_resolution",
       "running…",
@@ -82,6 +81,40 @@ describe("web UI assets", () => {
       expect(APP_JS + APP_CSS).toContain(expected);
     expect(APP_JS).toContain("'overview'");
     expect(APP_JS).toContain("'graphs'");
+  });
+
+  it("renders the deconstruction bench as a decorative, motion-safe instrument card", () => {
+    for (const expected of [
+      "'Specimen'",
+      "'Protocol'",
+      "'Elapsed'",
+      "'Lab note'",
+      "t = ",
+      "55 48",
+      "bn-hammer",
+      "bn-dust",
+      "viewBox: '0 0 224 96'",
+    ])
+      expect(APP_JS + APP_CSS).toContain(expected);
+    // The bench SVG and the lab-note captions are flavor text: hidden from assistive tech.
+    expect(APP_JS).toMatch(/svgEl\('svg', \{[^}]*'aria-hidden': 'true'/);
+    expect(APP_JS).toMatch(/note\.setAttribute\('aria-hidden', 'true'\)/);
+    expect(APP_JS).toMatch(/area\.setAttribute\('aria-hidden', 'true'\)/);
+    // Captions stop rotating (one shown) and nothing moves under reduced motion.
+    expect(APP_JS).toMatch(/if \(!reduced\) \{ noteTimer = setInterval/);
+    const motion = APP_CSS.indexOf(
+      "@media (prefers-reduced-motion: no-preference)",
+    );
+    const benchCss = APP_CSS.slice(APP_CSS.indexOf(".bn-line"));
+    const staticPart = benchCss.slice(
+      0,
+      benchCss.indexOf("@media (prefers-reduced-motion: no-preference)"),
+    );
+    expect(motion).toBeGreaterThan(-1);
+    expect(staticPart).not.toMatch(/animation\s*:/);
+    expect(benchCss).toMatch(/\.is-running \.bn-hammer \{ animation:/);
+    // Only transform/opacity are animated; no gradients inside the drawing.
+    expect(benchCss).not.toMatch(/Gradient/);
   });
 
   it("does not claim progress the server never reports", () => {

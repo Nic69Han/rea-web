@@ -105,6 +105,9 @@ function runDecompile(provider) {
   var progress = createProgress({
     steps: [{ id: 'decompile', label: 'Decompile and package (one provider session)' }],
     title: 'Export',
+    compact: true,
+    specimen: sourceName(state.lastSource),
+    notes: EXPORT_NOTES,
     line: 'One request decompiles every function in a single provider session, then builds the zip. Large targets take minutes; the server reports once at the end.',
     onCancel: function () { controller.abort(); },
   });

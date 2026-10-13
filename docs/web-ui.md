@@ -31,15 +31,20 @@ The page is one screen that moves through three stages (`idle`, `analyzing`, `re
    clipboard, and an **or enter a local path** disclosure. Dropped or chosen files are
    uploaded to a private temporary directory, analyzed, and removed; the result reports
    whether cleanup succeeded and retains the directory if removal failed.
-2. **Analyzing**: an SVG rosette with one ring segment per pipeline step the server
-   really performs (`inspect_artifact`, then `trace_dylib_resolution`), the target name,
-   elapsed time and **Cancel**. The server does not stream progress, so the animation is
-   indeterminate and every step reads "running…" until the single response arrives; for
+2. **Analyzing**: a compact instrument card (max 640 px, centered) with micro-labels
+   **Specimen** (the target name), **Protocol** and **Elapsed** (`t = 00:04.2`), a small
+   line-art "deconstruction bench" on grid paper (a mason chisels hex-labelled bricks that
+   land on a pile as source tokens such as `int`, `if`, `{`, `;`), a numbered checklist with
+   one row per pipeline step the server really performs (`inspect_artifact`, then
+   `trace_dylib_resolution`), a quiet **Cancel** button and a rotating **Lab note** caption
+   (light jokes every 2.5 s). The bench and the lab notes are decoration only: they are
+   `aria-hidden`, never imply progress, and carry no information. The server does not
+   stream progress, so every step reads "running…" until the single response arrives; for
    uploads the first step is labelled "Upload + artifact inventory" because the upload
    cannot be observed separately. The response then sets each step to its real status
-   (ok, not applicable, error; icon, color and text) and the page holds about 500 ms
-   before showing results. With `prefers-reduced-motion` the rosette is static and the
-   progress is text only.
+   (ok, not applicable, error, not reported; icon, color and text) and the page holds about
+   500 ms before showing results. With `prefers-reduced-motion` the bench is a static pose,
+   a single lab note is shown and does not rotate, and the elapsed time is text only.
 3. **Results**: a header bar (target name, format, size, short SHA-256 with a copy
    button, **Download decompiled code (.zip)**, **New analysis**) over a section nav:
    **Overview** (operation status, nodes/edges and coverage per graph, unresolved or
@@ -76,8 +81,8 @@ Ghidra, IDA and Hopper are bring-your-own (see [installation](installation.md)).
 `GET /api/capabilities` returns `{"deep_providers":[{"id","available","reason?"}]}` from the
 same provider availability logic as `rea` status; the button is disabled with the
 reason when none is available, and a provider select appears when several are. While
-an export runs, the Decompiled section shows its own rosette progress (one step, also
-indeterminate) with Cancel, then the file name, size, duration and upload cleanup status.
+an export runs, the Decompiled section shows the same instrument card in a smaller variant (one step,
+also indeterminate, with export-specific lab notes) with Cancel, then the file name, size, duration and upload cleanup status.
 Per-function counts are only in the zip's `manifest.json`; the server does not return
 them in headers, so the page does not show them.
 

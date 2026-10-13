@@ -28,12 +28,13 @@ The web UI SHALL present one page that moves through the stages `idle`, `analyzi
 
 ### Requirement: Honest analysis progress
 
-The analyzing stage SHALL show a rosette with one segment per step the server performs and SHALL NOT present progress the server did not report.
+The analyzing stage SHALL show a compact instrument card with one numbered protocol row per step the server performs, beside a decorative bench animation, and SHALL NOT present progress the server did not report.
 
 #### Scenario: Pending steps
 
 - **WHEN** a request is in flight
-- **THEN** the rosette is indeterminate, every step reads "running…", and elapsed time and a Cancel control are shown
+- **THEN** every step reads "running…", and the specimen name, a monospace elapsed clock and a Cancel control are shown
+- **AND** the bench animation and the rotating lab-note captions are flavor only, hidden from assistive technology, and never state or imply progress
 - **AND** an upload is labelled "Upload + artifact inventory" instead of a separately completed upload step
 
 #### Scenario: Real statuses
@@ -51,7 +52,7 @@ The analyzing stage SHALL show a rosette with one segment per step the server pe
 #### Scenario: Reduced motion
 
 - **WHEN** the user prefers reduced motion
-- **THEN** the rosette does not animate and progress is conveyed as text
+- **THEN** the bench is a static pose, a single lab note is shown without rotating, and progress is conveyed as text
 
 ### Requirement: Results workspace
 
@@ -71,7 +72,7 @@ The results stage SHALL show a header bar and the sections Overview, Graphs, Evi
 #### Scenario: Export progress
 
 - **WHEN** the user starts the export
-- **THEN** the Decompiled section shows its own indeterminate rosette progress with Cancel, then the file name, size, duration and cleanup status
+- **THEN** the Decompiled section shows the same instrument card in a smaller variant, indeterminate, with Cancel and export-specific lab notes, then the file name, size, duration and cleanup status
 - **AND** per-function counts are not shown because the server does not return them outside the zip
 
 ### Requirement: Accessible, CSP-safe presentation
@@ -87,4 +88,4 @@ The UI SHALL keep a strict CSP, define colors as tokens with light and dark vari
 
 - **WHEN** the viewport is 400 px wide
 - **THEN** the page has no horizontal scroll
-- **AND** each stage change is announced through an `aria-live` region and the rosette has an `img` role with a text equivalent
+- **AND** each stage change is announced through an `aria-live` region and the decorative bench and lab notes are `aria-hidden` while the step list carries the real state

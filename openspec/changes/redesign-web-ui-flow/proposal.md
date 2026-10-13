@@ -10,12 +10,12 @@ progress, and then land in a workspace for reading results.
 ## What Changes
 
 - One page, three stages: `idle` (drop target, choose-a-file button, path disclosure),
-  `analyzing` (analysis rosette), `results` (header bar plus Overview, Graphs, Evidence
+  `analyzing` (instrument card with a deconstruction-bench animation), `results` (header bar plus Overview, Graphs, Evidence
   and Decompiled sections). **New analysis** returns to `idle`.
-- The rosette has one ring segment per step the server really performs. Because the
+- The analyzing card lists one numbered protocol row per step the server really performs, beside a compact decorative bench animation and light lab-note captions (flavor only). Because the
   server does not stream progress, it is indeterminate until the response arrives, then
   each step shows its real status from `operations`.
-- The decompiled-code export moves to the results header bar with its own rosette progress.
+- The decompiled-code export moves to the results header bar with the same instrument card in a smaller variant.
 - Colors become tokens with light, dark and explicit `data-theme` variants; stage
   changes are announced through an `aria-live` region; `prefers-reduced-motion` is honored.
 

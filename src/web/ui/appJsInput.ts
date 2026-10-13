@@ -62,6 +62,8 @@ function startAnalysis(source) {
   var progress = createProgress({
     steps: steps,
     title: 'Analysis',
+    specimen: name,
+    notes: ANALYSIS_NOTES,
     line: 'Steps run on the local server, which reports once when all of them finish, so every pending step shows "running…".',
     onCancel: function () { controller.abort(); },
   });
