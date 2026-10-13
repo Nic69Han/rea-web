@@ -28,7 +28,7 @@ The system SHALL require the per-process token on every request other than rejec
 #### Scenario: Missing API token
 
 - **WHEN** a client sends `POST /api/analyze` without `x-rea-web-token`
-- **THEN** the server responds 401 with `{"error":{"code":...,"message":...}}`
+- **THEN** the server responds 403 (`forbidden_token`) with `{"error":{"code":...,"message":...}}`
 - **AND** no analysis starts and no file is written
 
 #### Scenario: Wrong page token
@@ -82,7 +82,7 @@ The system SHALL send on every response `Content-Security-Policy: default-src 's
 
 ### Requirement: Analysis of a local path
 
-The system SHALL accept `POST /api/analyze` with a JSON body `{"path": "<local path>"}` of at most 64 KiB. It SHALL run `inspect_artifact` and `trace_dylib_resolution` through the shared `runProviderAnalysis` workflow and respond 200 with a `WebAnalysisResponse` (`target.input_kind: "path"`) reporting each operation as `ok`, `error` or `not_applicable`. It SHALL NOT execute, modify or delete the target.
+The system SHALL accept `POST /api/analyze` with a JSON body `{"path": "<local path>"}` of at most 64 KiB. It SHALL run `inspect_artifact` (with `integrity_policy: "fail"`) and `trace_dylib_resolution` through the shared `runProviderAnalysis` workflow and respond 200 with a `WebAnalysisResponse` (`target.input_kind: "path"`) reporting each operation as `ok`, `error` or `not_applicable`. It SHALL NOT execute, modify or delete the target.
 
 #### Scenario: Path to an application bundle
 
@@ -94,6 +94,11 @@ The system SHALL accept `POST /api/analyze` with a JSON body `{"path": "<local p
 
 - **WHEN** the client posts a JSON body without a string `path`, or a body larger than 64 KiB
 - **THEN** the server responds 400 (or 413 for the oversized body) with an error object containing `code` and `message`
+
+#### Scenario: Unsupported content type
+
+- **WHEN** the client posts to `/api/analyze` with any media type other than `application/json` or `application/octet-stream`
+- **THEN** the server responds 400 with `{"error":{"code":"unsupported_content_type","message":...}}` and starts no analysis
 
 #### Scenario: Nonexistent path
 
@@ -164,7 +169,7 @@ The system SHALL run at most one analysis at a time and SHALL respond 409 to a `
 
 ### Requirement: Mach-O dylib dependency graph
 
-For a Mach-O or `.app` target, the system SHALL project `trace_dylib_resolution` into a `dylib-dependencies` graph of roots, images and unresolved install names, with load-command edges carrying `command`, `weak`, `upward`, `reexport` and `delayed_init`. Domain status `resolved`, `conditional`, `unresolved` and `undetermined` SHALL map to `resolved`, `ambiguous`, `unresolved` and `unknown`, and coverage and limitations SHALL come from the result.
+For a Mach-O or `.app` target, the system SHALL project `trace_dylib_resolution` into a `dylib-dependencies` graph of roots, images and unresolved install names, with load edges carrying `command`, `weak`, `upward`, `reexport`, `delayed_init`. Edge `resolution` SHALL derive from the domain edge status as stated in the scenarios, and coverage and limitations SHALL come from the result.
 
 #### Scenario: Resolved and unresolved loads
 
@@ -174,8 +179,14 @@ For a Mach-O or `.app` target, the system SHALL project `trace_dylib_resolution`
 
 #### Scenario: Conditional resolution is ambiguous
 
-- **WHEN** a load edge has domain status `conditional` or `undetermined`
-- **THEN** the projected edge has `resolution: "ambiguous"` or `"unknown"` respectively and is never shown as resolved
+- **WHEN** a load edge has domain status `conditional` or `undetermined` (any status other than `resolved` and `unresolved` maps to `unknown`)
+- **THEN** the projected edge has `resolution: "ambiguous"` or `"unknown"` respectively, keeps the domain value in `attributes.resolution_status`, and is never shown as resolved
+
+#### Scenario: Node kinds and findings
+
+- **WHEN** a load edge has no resolved image
+- **THEN** its target is a node of kind `unresolved-install-name` with id `install-name:<install name>`; resolved targets and loaders are `image` nodes and analyzed roots are `root-image` nodes
+- **AND** findings that reference the edge appear in `attributes.findings`, and findings that do not appear in `coverage.notes`
 
 #### Scenario: Partial coverage retained
 
@@ -215,12 +226,18 @@ The system SHALL project the `inspect_artifact` result into a graph with `graph_
 
 ### Requirement: Unknown coverage is preserved
 
-The system SHALL NOT convert unknown or missing coverage into complete coverage or absence. When a result lacks a coverage statement (for example legacy inventory Evidence without `coverage_status`), the graph `coverage.status` SHALL be `"unknown"`, with a note stating that coverage was not reported. The UI SHALL display `unknown`, `partial` and `complete` distinctly and SHALL NOT present an empty graph with unknown coverage as "no dependencies".
+The system SHALL NOT convert unknown or missing coverage into complete coverage or absence. The UI SHALL display `unknown`, `partial` and `complete` distinctly and SHALL NOT present an empty graph with unknown coverage as "no dependencies". The web projection SHALL NOT upgrade coverage reported by the domain.
+
+#### Scenario: Coverage sources
+
+- **WHEN** a graph is projected
+- **THEN** `dylib-dependencies` reports the result's `coverage.status` verbatim
+- **AND** `artifact-containment` reports `complete` only when the domain inventory classification is complete and every manifest-declared node, occurrence and edge was retained, otherwise `partial`
 
 #### Scenario: Missing coverage_status
 
-- **WHEN** the inventory result has no `coverage_status`
-- **THEN** the artifact graph reports `coverage.status: "unknown"` with an explanatory note
+- **WHEN** the inventory result has no `coverage_status` and carries an unrecognized limitation
+- **THEN** the artifact graph reports `coverage.status: "partial"`, never `"complete"`
 
 #### Scenario: Empty graph with unknown coverage
 

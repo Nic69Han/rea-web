@@ -158,14 +158,22 @@ Mappings:
   `content_state`); edge per `ArtifactEdge` from `parent_artifact_id` to the
   occurrence's `artifact_id` with `relation` preserved and `resolution:
   "observed"`; occurrences whose `artifact_id` is null produce no node and are
-  counted in coverage notes. `coverage_status` maps directly, and an absent
-  value (legacy Evidence) maps to `unknown`.
+  counted in coverage notes. Edges carry `observed` when the container produced
+  the `contains`/`slice-of` relation itself and `derived` otherwise. Coverage is
+  owned by the domain inventory parser (legacy Evidence without
+  `coverage_status` is classified fail-closed there); the graph reports
+  `complete` only for a complete classification with all manifest-declared
+  items retained, otherwise `partial`.
 - `dylib-dependencies`: nodes for roots, images and unresolved install names;
   edges per load command with `weak`, `upward`, `reexport`, `delayed_init`,
   `command` attributes. Resolution: `resolved` -> `resolved`, `conditional` ->
-  `ambiguous`, `unresolved` -> `unresolved`, `undetermined` -> `unknown`.
-  `coverage.status`, `unparsed_images` and `roots_without_architecture` populate
-  coverage notes; `findings` explanations are kept as limitations.
+  `ambiguous`, `unresolved` -> `unresolved`, any other status (`undetermined`)
+  -> `unknown`; the domain value is kept in `attributes.resolution_status`.
+  Edge targets without a resolved image become `unresolved-install-name` nodes.
+  `coverage.status` is copied; `unparsed_images` and
+  `roots_without_architecture` populate coverage notes; `findings` are attached
+  to their edge (`attributes.findings`) or, when not edge-specific, to coverage
+  notes. Limitations are the union of the result and Evidence limitations.
 
 Unresolved or conditional edges stay visible, not dropped. Unknown coverage is
 `unknown`, never an empty "none".
@@ -222,12 +230,12 @@ sequenceDiagram
 
     Analyst->>UI: open URL with ?token, paste path / drop file
     UI->>UI: read token, replaceState to strip it
-    UI->>Web: POST /api/analyze (x-rea-web-token, JSON path or octet-stream)
+    UI->>Web: POST /api/analyze (x-rea-web-token, JSON path or octet-stream; other media types: 400 unsupported_content_type)
     Web->>Web: check Host, Origin, token, busy, size
     opt upload
         Web->>Web: write 0600 file in 0700 temp dir
     end
-    Web->>WF: inspect_artifact(path, signal)
+    Web->>WF: inspect_artifact(path, integrity_policy=fail, signal)
     WF->>Art: open fresh session, execute, cleanup
     Art-->>WF: Evidence JSON or error
     WF-->>Web: JsonValue
@@ -257,8 +265,9 @@ sequenceDiagram
   and the CSP, with a test scanning for forbidden sinks.
 - Hand-written layout limits readability on large graphs. Caps and clear
   truncation reporting; replaceable behind `WebGraph`.
-- Unbundled `dist/web` may start slightly slower than bundled entries; not a
-  hot path. Open question.
+- `dist/web` is not bundled: it is compiled by `tsc` with relative imports and
+  loads like other `dist` modules, so it only runs from a built checkout or a
+  package that ships `dist/`. Whether to bundle remains a maintainer decision.
 - Scope risk: reviewers may consider any network adapter out of scope. The
   change stays a draft until maintainers decide; nothing is enabled by default
   in other modes.
