@@ -51,6 +51,27 @@ The page is one screen that moves through three stages (`idle`, `analyzing`, `re
    ambiguous references highlighted, top limitations, target, cleanup), **Graphs**,
    **Evidence** (operation cards with raw JSON) and **Decompiled** (export status).
 
+## Run with Docker
+
+The `docker/rea-web/` image runs the same server, with Ghidra for the
+decompiled-code export, on a host that only has Docker. Build and run it with
+host networking so the in-container loopback is the host loopback:
+
+```sh
+docker build -f docker/rea-web/Dockerfile -t rea-web .   # --build-arg WITH_GHIDRA=0 for a slim image
+docker run --rm --network host --read-only --tmpfs /tmp \
+  --cap-drop ALL --security-opt no-new-privileges --memory 4g \
+  -v "$PWD:/work:ro" rea-web
+```
+
+Open the tokenized `http://127.0.0.1:8080/?token=...` URL from the container logs and
+analyze paths under `/work` or drop files. The server, its loopback-only binding and
+its token, `Host` and `Origin` checks are unchanged. `--network host` is native on
+Linux; Docker Desktop needs host networking enabled (4.34 or later), and without it the
+UI is unreachable by design. This is not a sandbox for hostile binaries. See
+[docker/rea-web/README.md](https://github.com/morluto/rea/blob/main/docker/rea-web/README.md) for resources, variants and
+security notes.
+
 ## Security model
 
 - Binds only to loopback and rejects any `Host` or `Origin` that is not the bound address (403).
@@ -126,6 +147,6 @@ Procedures are taken in the provider's order; external and thunk procedures are 
 - The export is sequential and can take minutes on large targets; Cancel aborts it.
 - Verified end to end with Ghidra 12.1.4 on a small ELF only; IDA and Hopper exports are
   covered by shared-provider tests, not by a real run.
-- `dist/web` is not bundled; it runs from a built checkout.
+- `dist/web` is not bundled; it runs from a built checkout or the Docker image.
 - The hand-written layout is meant for modest graphs.
 - Verified with the Chromium browser and synthetic Mach-O fixtures only.
