@@ -3,7 +3,7 @@ var DEEP_LABELS = { ghidra: 'Ghidra', ida: 'IDA', hopper: 'Hopper' };
 
 function loadCapabilities() {
   state.capabilities = { status: 'loading', providers: [] };
-  return fetch('/api/capabilities', { headers: { 'x-rea-web-token': state.token } })
+  state.capsPromise = fetch('/api/capabilities', { headers: { 'x-rea-web-token': state.token } })
     .then(readResponse)
     .then(function (r) {
       if (r.res.ok && isRecord(r.data) && Array.isArray(r.data.deep_providers)) {
@@ -15,6 +15,7 @@ function loadCapabilities() {
     .catch(function () {
       state.capabilities = { status: 'error', providers: [], message: 'Provider availability could not be read.' };
     });
+  return state.capsPromise;
 }
 
 function providerLabel(p) { return DEEP_LABELS[p.id] || String(p.id); }
@@ -52,8 +53,7 @@ function decompileRequest(source, provider) {
   };
 }
 
-function showDecompileError(slot, status, data, text) {
-  clearNode(slot);
+function appendDecompileError(slot, status, data, text) {
   var err = isRecord(data) && isRecord(data.error) ? data.error : null;
   var box = el('div', 'banner banner-error');
   box.setAttribute('role', 'alert');
@@ -66,93 +66,145 @@ function showDecompileError(slot, status, data, text) {
   slot.appendChild(box);
 }
 
-function runDecompile(slot, provider) {
-  if (state.busy || !state.lastSource) { return; }
+function exportSummary(res, blob, secs, provider) {
+  var cleanup = res.headers.get('x-rea-cleanup');
+  var box = el('div', 'banner banner-ok');
+  box.setAttribute('role', 'note');
+  box.appendChild(el('strong', null, 'Export finished'));
+  box.appendChild(kvList([
+    ['File', downloadName(res), 'mono'],
+    ['Size', fmtBytes(blob.size)],
+    ['Duration', secs.toFixed(1) + ' s'],
+    ['Provider', provider || 'automatic'],
+    ['Upload cleanup', cleanup || undefined],
+  ]));
+  box.appendChild(el('div', 'hint', 'Function counts and per-function status are in manifest.json inside the zip.'));
+  if (cleanup === 'failed') {
+    var detail = res.headers.get('x-rea-cleanup-detail');
+    var b = el('div', 'banner banner-error');
+    b.setAttribute('role', 'alert');
+    b.appendChild(el('strong', null, 'Cleanup: failed'));
+    b.appendChild(el('div', null, detail ? decodeURIComponent(detail) : 'The temporary upload directory was retained.'));
+    box.appendChild(b);
+  }
+  return box;
+}
+
+function runDecompile(provider) {
+  var ws = state.workspace;
+  if (state.busy || !state.lastSource || !ws) { return; }
+  var gen = state.gen;
+  var slot = ws.decompileSlot;
   var req = decompileRequest(state.lastSource, provider);
   var controller = new AbortController();
   state.controller = controller;
   state.startedAt = performance.now();
-  setBusy(true);
+  state.busy = true;
+  ws.select('decompiled');
   clearNode(slot);
-  var tick = function () { setStatus('Decompiling — ' + elapsedSeconds().toFixed(1) + ' s (one provider session; large targets take minutes)', ''); };
-  tick();
-  state.timer = setInterval(tick, 200);
+  var progress = createProgress({
+    steps: [{ id: 'decompile', label: 'Decompile and package (one provider session)' }],
+    title: 'Export',
+    line: 'One request decompiles every function in a single provider session, then builds the zip. Large targets take minutes; the server reports once at the end.',
+    onCancel: function () { controller.abort(); },
+  });
+  slot.appendChild(progress.root);
+  state.progress = progress;
+  progress.start();
+  ws.refreshExport();
+  announce('Decompiled-code export started.');
   req.init.signal = controller.signal;
+  var done = function (status, lineText) {
+    var secs = finishRun();
+    state.progress = null;
+    progress.complete([status], lineText.replace('%s', secs.toFixed(1)));
+    ws.refreshExport();
+    return secs;
+  };
   fetch(req.url, req.init)
     .then(function (res) {
+      if (gen !== state.gen) { return; }
       var type = res.headers.get('content-type') || '';
       if (res.ok && type.indexOf('application/zip') === 0) {
         return res.blob().then(function (blob) {
-          var secs = finishRun();
+          if (gen !== state.gen) { return; }
+          var secs = done('ok', 'Export finished in %s s.');
           saveBlob(blob, downloadName(res));
-          setStatus('Export finished in ' + secs.toFixed(1) + ' s (' + fmtBytes(blob.size) + ').', 'ok');
-          if (res.headers.get('x-rea-cleanup') === 'failed') {
-            var detail = res.headers.get('x-rea-cleanup-detail');
-            var b = el('div', 'banner banner-error');
-            b.setAttribute('role', 'alert');
-            b.appendChild(el('strong', null, 'Cleanup: failed'));
-            b.appendChild(el('div', null, detail ? decodeURIComponent(detail) : 'The temporary upload directory was retained.'));
-            slot.appendChild(b);
-          }
+          state.exportInfo = { name: downloadName(res), bytes: blob.size, seconds: secs };
+          slot.appendChild(exportSummary(res, blob, secs, provider));
+          announce('Export finished in ' + secs.toFixed(1) + ' seconds. The zip download started.');
         });
       }
       return readResponse(res).then(function (r) {
-        var secs = finishRun();
-        showDecompileError(slot, res.status, r.data, r.text);
-        setStatus('Export failed (HTTP ' + res.status + ') after ' + secs.toFixed(1) + ' s.', 'error');
+        if (gen !== state.gen) { return; }
+        done('error', 'Export failed after %s s.');
+        appendDecompileError(slot, res.status, r.data, r.text);
+        announce('Export failed (HTTP ' + res.status + ').');
       });
     })
     .catch(function (err) {
-      var secs = finishRun();
+      if (gen !== state.gen) { return; }
       if (err && err.name === 'AbortError') {
-        setStatus('Export cancelled after ' + secs.toFixed(1) + ' s.', 'warn');
+        var secs = finishRun();
+        state.progress = null;
+        progress.dispose();
+        clearNode(slot);
+        slot.appendChild(noticeBanner('warn', 'Export cancelled', 'Cancelled after ' + secs.toFixed(1) + ' s. No file was downloaded.'));
+        ws.refreshExport();
+        announce('Export cancelled.');
       } else {
-        showDecompileError(slot, 0, null, String((err && err.message) || err));
-        setStatus('Network error after ' + secs.toFixed(1) + ' s.', 'error');
+        done('error', 'Export failed after %s s.');
+        appendDecompileError(slot, 0, null, String((err && err.message) || err));
+        announce('Export failed: network error.');
       }
     });
 }
 
-function decompileCard() {
-  var card = el('section', 'card');
-  card.appendChild(el('h2', null, 'Decompiled code'));
-  var caps = state.capabilities;
-  var providers = caps ? caps.providers : [];
-  var usable = providers.filter(function (p) { return p.available === true; });
-  card.appendChild(el('p', 'hint', 'Runs the deep provider once over this target and downloads pseudo-code as a zip. Pseudo-code is derived, provider-specific output, not original source.'));
-  var row = el('div', 'field-row');
+// Header-bar export control: disabled with a visible reason when no deep provider is usable.
+function createExportControl() {
+  var root = el('div', 'export-control');
   var select = null;
-  if (usable.length > 1) {
-    select = el('select');
-    select.setAttribute('aria-label', 'Deep provider');
-    var auto = el('option', null, 'Automatic provider');
-    auto.value = '';
-    select.appendChild(auto);
-    usable.forEach(function (p) {
-      var o = el('option', null, providerLabel(p));
-      o.value = String(p.id);
-      select.appendChild(o);
-    });
-    row.appendChild(select);
-  }
   var button = el('button', 'primary', 'Download decompiled code (.zip)');
   button.type = 'button';
-  var slot = el('div');
-  button.disabled = usable.length === 0 || !state.lastSource || state.busy;
-  button.addEventListener('click', function () { runDecompile(slot, select ? select.value : ''); });
-  row.appendChild(button);
-  card.appendChild(row);
-  if (usable.length === 0) {
-    var why = caps && caps.status === 'error' ? caps.message : (caps && caps.status === 'loading' ? 'Checking deep providers…' : 'No deep provider is available. Install or configure Ghidra, IDA or Hopper (see docs/installation.md).');
-    var note = el('div', 'banner banner-warn');
-    note.appendChild(el('div', null, why));
-    var unavailable = providers.filter(function (p) { return p.available !== true; });
-    if (unavailable.length > 0) {
-      note.appendChild(listOf(unavailable.map(function (p) { return providerLabel(p) + ': ' + (p.reason || 'unavailable'); })));
+  var reason = el('p', 'hint export-reason');
+  reason.id = 'export-reason';
+  button.addEventListener('click', function () { runDecompile(select ? select.value : ''); });
+  root.appendChild(button);
+  root.appendChild(reason);
+  var control = { root: root };
+  control.refresh = function () {
+    var caps = state.capabilities;
+    var providers = caps ? caps.providers : [];
+    var usable = providers.filter(function (p) { return p.available === true; });
+    if (select) { select.remove(); select = null; }
+    if (usable.length > 1) {
+      select = el('select');
+      select.setAttribute('aria-label', 'Deep provider');
+      var auto = el('option', null, 'Automatic provider');
+      auto.value = '';
+      select.appendChild(auto);
+      usable.forEach(function (p) {
+        var o = el('option', null, providerLabel(p));
+        o.value = String(p.id);
+        select.appendChild(o);
+      });
+      root.insertBefore(select, button);
     }
-    card.appendChild(note);
-  }
-  card.appendChild(slot);
-  return card;
+    var why = null;
+    if (usable.length === 0) {
+      why = caps && caps.status === 'error' ? caps.message : (!caps || caps.status === 'loading' ? 'Checking deep providers…' : 'No deep provider is available. Install or configure Ghidra, IDA or Hopper (see docs/installation.md).');
+      var unavailable = providers.filter(function (p) { return p.available !== true; });
+      if (unavailable.length > 0) {
+        why += ' ' + unavailable.map(function (p) { return providerLabel(p) + ': ' + (p.reason || 'unavailable') + '.'; }).join(' ');
+      }
+    } else if (state.busy) {
+      why = 'An analysis or export is running.';
+    }
+    button.disabled = usable.length === 0 || !state.lastSource || state.busy;
+    if (why) { button.setAttribute('aria-describedby', 'export-reason'); } else { button.removeAttribute('aria-describedby'); }
+    reason.textContent = why || '';
+    reason.hidden = !why;
+  };
+  return control;
 }
 `;

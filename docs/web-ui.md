@@ -21,9 +21,30 @@ exact URL; the page removes the token from the address bar and sends it as a hea
 | `REA_WEB_HOST`             | `127.0.0.1` | Literal `127.0.0.1` or `::1` only.       |
 | `REA_WEB_MAX_UPLOAD_BYTES` | `268435456` | Upload size cap; larger uploads get 413. |
 
-Enter a local path, or drop or paste a file. Dropped files are uploaded to a private
-temporary directory, analyzed, and removed; the result reports whether cleanup
-succeeded and retains the directory if removal failed.
+## The three stages
+
+The page is one screen that moves through three stages (`idle`, `analyzing`, `results`);
+**New analysis** returns to `idle`. Stage changes are announced through an `aria-live` region.
+
+1. **Idle**: a large drop target ("Drop a binary, app bundle or archive here"; the whole
+   window accepts a drop), a **choose a file** button, Ctrl/Cmd+V for a file on the
+   clipboard, and an **or enter a local path** disclosure. Dropped or chosen files are
+   uploaded to a private temporary directory, analyzed, and removed; the result reports
+   whether cleanup succeeded and retains the directory if removal failed.
+2. **Analyzing**: an SVG rosette with one ring segment per pipeline step the server
+   really performs (`inspect_artifact`, then `trace_dylib_resolution`), the target name,
+   elapsed time and **Cancel**. The server does not stream progress, so the animation is
+   indeterminate and every step reads "running…" until the single response arrives; for
+   uploads the first step is labelled "Upload + artifact inventory" because the upload
+   cannot be observed separately. The response then sets each step to its real status
+   (ok, not applicable, error; icon, color and text) and the page holds about 500 ms
+   before showing results. With `prefers-reduced-motion` the rosette is static and the
+   progress is text only.
+3. **Results**: a header bar (target name, format, size, short SHA-256 with a copy
+   button, **Download decompiled code (.zip)**, **New analysis**) over a section nav:
+   **Overview** (operation status, nodes/edges and coverage per graph, unresolved or
+   ambiguous references highlighted, top limitations, target, cleanup), **Graphs**,
+   **Evidence** (operation cards with raw JSON) and **Decompiled** (export status).
 
 ## Security model
 
@@ -45,7 +66,7 @@ coverage (`complete`, `partial`, `unknown`). Graphs are capped at 500 nodes and
 
 ## Download decompiled code (.zip)
 
-After a result renders, the page offers **Download decompiled code (.zip)**. It runs the
+In the results header bar, **Download decompiled code (.zip)** runs the
 existing read-only deep-provider operations (`list_procedures`, then
 `procedure_pseudo_code` per procedure) inside **one** provider session: the target is
 opened once, every function is decompiled sequentially, and the session is closed. With
@@ -54,7 +75,11 @@ Ghidra that avoids paying import and auto-analysis per function.
 Ghidra, IDA and Hopper are bring-your-own (see [installation](installation.md)).
 `GET /api/capabilities` returns `{"deep_providers":[{"id","available","reason?"}]}` from the
 same provider availability logic as `rea` status; the button is disabled with the
-reason when none is available, and a provider select appears when several are.
+reason when none is available, and a provider select appears when several are. While
+an export runs, the Decompiled section shows its own rosette progress (one step, also
+indeterminate) with Cancel, then the file name, size, duration and upload cleanup status.
+Per-function counts are only in the zip's `manifest.json`; the server does not return
+them in headers, so the page does not show them.
 
 `POST /api/decompile` takes `{"path": string, "provider"?: "ghidra"|"ida"|"hopper",
 "max_functions"?: integer}` as JSON, or an `application/octet-stream` upload exactly like

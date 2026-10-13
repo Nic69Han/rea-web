@@ -1,5 +1,6 @@
 export const RESULTS_JS: string = String.raw`
-function badge(text, cls) { return el('span', 'badge badge-' + cls, text); }
+var ICONS = { ok: '✓', error: '✕', na: '–', warn: '!' };
+function badge(text, cls) { return el('span', 'badge badge-' + cls, (ICONS[cls] ? ICONS[cls] + ' ' : '') + text); }
 
 function kvList(pairs) {
   var dl = el('dl', 'kv');
@@ -35,18 +36,10 @@ function listOf(items, cls) {
   return ul;
 }
 
-function failureHint(status) {
-  if (status === 401 || status === 403) { return 'The access token or request origin was rejected. Open the URL printed by "rea web" again.'; }
-  if (status === 409 || status === 429) { return 'Another analysis is already running. Wait for it to finish, then retry.'; }
-  if (status === 413) { return 'The upload is larger than the server limit.'; }
-  if (status === 0) { return 'The local server did not respond. Is "rea web" still running?'; }
-  return null;
-}
-
-function renderFailure(status, data, text) {
-  clearNode(dom.results);
+function failureCard(status, data, text) {
   var err = data && isRecord(data.error) ? data.error : null;
   var card = el('section', 'card card-error');
+  card.setAttribute('role', 'alert');
   var head = el('div', 'op-head');
   head.appendChild(el('h2', null, 'Request failed'));
   head.appendChild(badge(status ? 'HTTP ' + status : 'network', 'error'));
@@ -57,7 +50,7 @@ function renderFailure(status, data, text) {
   var hint = failureHint(status);
   if (hint) { card.appendChild(el('p', 'hint', hint)); }
   if (data !== null) { card.appendChild(jsonDetails('Raw response', data)); }
-  dom.results.appendChild(card);
+  return card;
 }
 
 function targetCard(t) {
@@ -129,72 +122,5 @@ function cleanupCard(c) {
   if (c.detail) { b.appendChild(el('div', null, c.detail)); }
   if (failed) { b.appendChild(el('div', 'hint', 'The temporary upload directory was retained and may still hold the file.')); }
   return b;
-}
-
-function renderResult(data) {
-  clearNode(dom.results);
-  var root = dom.results;
-  if (isRecord(data.target)) { root.appendChild(targetCard(data.target)); root.appendChild(decompileCard()); }
-  var ops = Array.isArray(data.operations) ? data.operations.filter(isRecord) : [];
-  var opSection = el('section');
-  opSection.appendChild(el('h2', null, 'Operations'));
-  var list = el('div', 'op-list');
-  ops.forEach(function (op) { list.appendChild(opCard(op)); });
-  if (ops.length === 0) { list.appendChild(el('p', 'empty', 'No operations were reported.')); }
-  opSection.appendChild(list);
-  root.appendChild(opSection);
-  root.appendChild(renderGraphSection(Array.isArray(data.graphs) ? data.graphs.filter(isRecord) : []));
-  if (isRecord(data.cleanup)) { root.appendChild(cleanupCard(data.cleanup)); }
-}
-
-function renderGraphSection(graphs) {
-  var section = el('section');
-  section.appendChild(el('h2', null, 'Graphs'));
-  if (graphs.length === 0) {
-    section.appendChild(el('p', 'empty', 'No graphs were produced for this target.'));
-    return section;
-  }
-  var tabs = el('div', 'tabs');
-  tabs.setAttribute('role', 'tablist');
-  tabs.setAttribute('aria-label', 'Graphs');
-  var panel = el('div');
-  panel.setAttribute('role', 'tabpanel');
-  var buttons = [];
-  var views = [];
-  var current = -1;
-  function show(i) {
-    current = i;
-    buttons.forEach(function (b, j) {
-      b.setAttribute('aria-selected', String(j === i));
-      b.tabIndex = j === i ? 0 : -1;
-    });
-    if (!views[i]) { views[i] = buildGraphView(graphs[i]); }
-    clearNode(panel);
-    panel.appendChild(views[i].root);
-    panel.setAttribute('aria-labelledby', 'graph-tab-' + i);
-    views[i].afterAttach();
-  }
-  graphs.forEach(function (g, i) {
-    var nodeCount = Array.isArray(g.nodes) ? g.nodes.length : 0;
-    var b = el('button', null, (g.title || g.graph_id || 'Graph ' + (i + 1)) + ' (' + nodeCount + ')');
-    b.type = 'button';
-    b.id = 'graph-tab-' + i;
-    b.setAttribute('role', 'tab');
-    b.addEventListener('click', function () { show(i); });
-    b.addEventListener('keydown', function (e) {
-      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
-      if (d === 0) { return; }
-      e.preventDefault();
-      var n = (current + d + graphs.length) % graphs.length;
-      show(n);
-      buttons[n].focus();
-    });
-    buttons.push(b);
-    tabs.appendChild(b);
-  });
-  section.appendChild(tabs);
-  section.appendChild(panel);
-  show(0);
-  return section;
 }
 `;

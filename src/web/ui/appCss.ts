@@ -1,5 +1,6 @@
-export const APP_CSS: string = String.raw`
-:root {
+import { STAGES_CSS } from "./appCssStages.js";
+
+const LIGHT_VARS: string = `:root {
   color-scheme: light dark;
   --bg: #f4f5f7;
   --panel: #ffffff;
@@ -9,9 +10,12 @@ export const APP_CSS: string = String.raw`
   --border: #cfd6de;
   --accent: #0b5fcc;
   --accent-fg: #ffffff;
+  --accent-soft: #dbe8fb;
   --ok: #1a7f37;
   --warn: #a35200;
   --bad: #c62828;
+  --amb: #e08a00;
+  --unk: #8a8f98;
   --edge: #4b5563;
   --k0: #0072b2;
   --k1: #e69f00;
@@ -21,9 +25,8 @@ export const APP_CSS: string = String.raw`
   --k5: #d55e00;
   --k6: #bba800;
   --k7: #7a7a7a;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
+}`;
+const DARK_VARS: string = `    color-scheme: dark;
     --bg: #111418;
     --panel: #1a1f26;
     --panel-2: #232a33;
@@ -32,9 +35,12 @@ export const APP_CSS: string = String.raw`
     --border: #3a444f;
     --accent: #6aa9ff;
     --accent-fg: #0b1220;
+    --accent-soft: #1d2f4a;
     --ok: #4cc26b;
     --warn: #ffb04d;
     --bad: #ff6b6b;
+    --amb: #f0a030;
+    --unk: #a0a8b2;
     --edge: #9aa5b1;
     --k0: #4aa3df;
     --k1: #f0b429;
@@ -43,8 +49,17 @@ export const APP_CSS: string = String.raw`
     --k4: #7cc6f2;
     --k5: #f08a4b;
     --k6: #e6d84a;
-    --k7: #a0a0a0;
+    --k7: #a0a0a0;`;
+
+const BASE_CSS: string = `
+${LIGHT_VARS}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+${DARK_VARS}
   }
+}
+:root[data-theme="dark"] {
+${DARK_VARS}
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -55,23 +70,15 @@ body {
   font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-header.app-header { padding: 16px; border-bottom: 1px solid var(--border); background: var(--panel); }
-header.app-header h1 { margin: 0; font-size: 20px; }
-header.app-header p { margin: 4px 0 0; color: var(--muted); }
-main { max-width: 1280px; margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
-footer { max-width: 1280px; margin: 0 auto; padding: 0 16px 24px; color: var(--muted); font-size: 12px; }
 h2 { font-size: 16px; margin: 0 0 8px; }
 h3 { font-size: 14px; margin: 0; }
 code, pre, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
-.card, .drop-zone {
+.card {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 16px;
 }
-.drop-zone { border-style: dashed; border-width: 2px; }
-.drop-zone.dragover { border-color: var(--accent); background: var(--panel-2); }
-.drop-zone.busy { opacity: 0.9; }
 .field-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .field-row label { flex: 1 0 100%; font-weight: 600; }
 input[type="text"], input[type="search"], select {
@@ -98,17 +105,6 @@ button:hover:not(:disabled) { border-color: var(--accent); }
 button:disabled, input:disabled { opacity: 0.55; cursor: not-allowed; }
 button.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
 .hint { color: var(--muted); margin: 8px 0 0; font-size: 13px; }
-.status { display: flex; align-items: center; gap: 8px; min-height: 24px; margin-top: 8px; }
-.status.error { color: var(--bad); }
-.status.warn { color: var(--warn); }
-.status.ok { color: var(--ok); }
-.spinner {
-  width: 14px; height: 14px; border-radius: 50%;
-  border: 2px solid var(--border); border-top-color: var(--accent);
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
 .banner {
   border: 1px solid var(--border);
   border-left-width: 4px;
@@ -176,14 +172,14 @@ button.link { border: none; background: none; padding: 0; color: var(--accent); 
 .edge.res-observed, .edge.res-resolved { stroke-dasharray: none; }
 .edge.res-derived, .edge.res-inferred { stroke-dasharray: 7 4; }
 .edge.res-unresolved { stroke: var(--bad); stroke-dasharray: 2 4; stroke-linecap: round; stroke-width: 1.8; }
-.edge.res-ambiguous { stroke: #e08a00; stroke-width: 2; }
-.edge.res-unknown { stroke: #8a8f98; stroke-dasharray: 9 3 2 3; }
+.edge.res-ambiguous { stroke: var(--amb); stroke-width: 2; }
+.edge.res-unknown { stroke: var(--unk); stroke-dasharray: 9 3 2 3; }
 .edge.hl { stroke-width: 3; }
 .viewport.has-sel .edge:not(.hl) { opacity: 0.18; }
 .arrow { fill: var(--edge); }
 .arrow.res-unresolved { fill: var(--bad); }
-.arrow.res-ambiguous { fill: #e08a00; }
-.arrow.res-unknown { fill: #8a8f98; }
+.arrow.res-ambiguous { fill: var(--amb); }
+.arrow.res-unknown { fill: var(--unk); }
 .node { cursor: pointer; }
 .node rect { fill-opacity: 0.2; stroke-width: 1.5; }
 .node text { fill: var(--fg); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; pointer-events: none; }
@@ -209,3 +205,5 @@ button.link { border: none; background: none; padding: 0; color: var(--accent); 
 .swatch.kind-6 { border-color: var(--k6); background: color-mix(in srgb, var(--k6) 30%, transparent); }
 .swatch.kind-7 { border-color: var(--k7); background: color-mix(in srgb, var(--k7) 30%, transparent); }
 `;
+
+export const APP_CSS: string = BASE_CSS + STAGES_CSS;
