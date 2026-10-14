@@ -23,8 +23,8 @@ import {
 
 const INSTALL = "/opt/ghidra_12.1.4_PUBLIC";
 
-export const connectGhidraMcp = async (
-  name: string,
+/** Compose a Ghidra-backed session over an in-process fixture client. */
+export const createGhidraFixtureSession = (
   execute?: ReturnType<GhidraProviderClientFactory>["callTool"],
 ) => {
   const calls: GhidraOperation[] = [];
@@ -52,6 +52,14 @@ export const connectGhidraMcp = async (
   const session = composeBinarySession(
     new AnalysisProviderRegistry([provider]),
   );
+  return { calls, config: config.value, session };
+};
+
+export const connectGhidraMcp = async (
+  name: string,
+  execute?: ReturnType<GhidraProviderClientFactory>["callTool"],
+) => {
+  const { calls, session } = createGhidraFixtureSession(execute);
   const server = createServer(
     { kind: "session", session },
     { logger: silentLogger },

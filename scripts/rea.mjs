@@ -14,6 +14,8 @@ process.env.REA_PACKAGE_VERSION = packageJson.version;
 const isMcpMode =
   args.length === 1 && (args[0] === "--mcp" || args[0] === "mcp");
 const isMcpDoctorMode = args[0] === "mcp" && args[1] === "doctor";
+// `rea web` serves the local static-analysis UI; it has no subcommands.
+const isWebMode = args.length === 1 && args[0] === "web";
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 // Windows home lookup throws for an empty USERPROFILE. Dependencies resolve
@@ -36,21 +38,26 @@ if (
   process.env.PLAYWRIGHT_BROWSERS_PATH = join(cacheRoot, "ms-playwright");
 }
 
-const runtimeFiles = isMcpMode
-  ? ["dist/mcp/main.js"]
-  : isMcpDoctorMode
-    ? ["dist/mcp/main.js", "dist/cli-runtime/mcpDoctor.js"]
-    : [
-        "dist/cli-runtime/cli.js",
-        "dist/cli-runtime/cliOutput.js",
-        "dist/cli-runtime/cliResultOutput.js",
-      ];
+const runtimeFiles = isWebMode
+  ? ["dist/web/main.js"]
+  : isMcpMode
+    ? ["dist/mcp/main.js"]
+    : isMcpDoctorMode
+      ? ["dist/mcp/main.js", "dist/cli-runtime/mcpDoctor.js"]
+      : [
+          "dist/cli-runtime/cli.js",
+          "dist/cli-runtime/cliOutput.js",
+          "dist/cli-runtime/cliResultOutput.js",
+        ];
 
 if (!(await compiledRuntimeExists(runtimeFiles))) {
   process.stderr.write(
     `REA's compiled runtime is missing. Run \`npm ci && npm run build:cached\` in ${packageRoot} to install dependencies and build REA, then restart it. If this is an installed package, reinstall rea-agents.\n`,
   );
   process.exitCode = 1;
+} else if (isWebMode) {
+  const { runEntrypoint } = await import("../dist/web/main.js");
+  process.exitCode = await runEntrypoint();
 } else if (isMcpMode) {
   const { runEntrypoint } = await import("../dist/mcp/main.js");
   await runEntrypoint();

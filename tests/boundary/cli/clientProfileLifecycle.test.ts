@@ -138,6 +138,9 @@ cliTest(
 for (const group of groups) {
   cliTest(
     `${group.name} lifecycle follows the selected roots`,
+    // Sequential compiled-CLI launches (about 1.3-2.6 s each, 16 for the
+    // six-client group, ~33 s measured) exceed the 30 s default.
+    { timeout: 90_000 },
     async ({ cli }) => {
       const home = await createTestTempDirectory("rea-client-profile-");
       const environment: NodeJS.ProcessEnv = { HOME: home, USERPROFILE: home };
