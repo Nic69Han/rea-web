@@ -477,6 +477,9 @@ cliTest(
   "reports each same-named slice's own embedded dyld environment",
   async ({ cli }) => {
     // arm64e and arm64e.x1 slices both report the architecture name arm64e.
+    // The universal image is a helper root: target resolution requires the
+    // bundle's own executable to have a host-compatible slice, which these
+    // arm64e-only slices lack on non-arm64 hosts.
     for (const [settings, expected] of [
       [[null, "DYLD_PRINT_RPATHS=1"], ["DYLD_PRINT_RPATHS=1"]],
       [
@@ -486,7 +489,7 @@ cliTest(
     ] as const) {
       const app = await fixtureApp();
       await writeFiles(app, {
-        "Contents/MacOS/App": fatImage(
+        "Contents/Helpers/tool": fatImage(
           [CPU.arm64e, CPU.arm64eX1].map((cpu, index) => {
             const setting = settings[index];
             return {
@@ -507,7 +510,7 @@ cliTest(
           "trace-dylib-resolution",
           app,
           "--root",
-          "Contents/MacOS/App",
+          "Contents/Helpers/tool",
           "--json",
         ],
         environment: ENVIRONMENT,
